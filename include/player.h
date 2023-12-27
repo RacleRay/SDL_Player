@@ -10,7 +10,7 @@ class AudioPlay;
 
 class FFmpegPlayer {
   public:
-    FFmpegPlayer();
+    FFmpegPlayer() = default;
 
     void setFilePath(const char *filePath);
 
