@@ -18,7 +18,7 @@ public:
 
     void quit();
 
-    void registerEvent(uint32_t eventType, const std::function<void(SDL_Event*)> &callback);
+    void registerEvent(Uint32 eventType, const std::function<void(SDL_Event*)> &callback);
 
 public:
     static SDLApp *instance();

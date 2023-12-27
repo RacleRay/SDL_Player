@@ -22,6 +22,8 @@ extern "C" {
 #endif
 
 #include "log.h"
+#include "sdlapp.h"
+#include "timer.h"
 
 
 int main(int argc, char **argv) {
@@ -30,5 +32,12 @@ int main(int argc, char **argv) {
     // }
     ff_log_line("%s", "test");
 
+    SDLApp app;
+
+    Timer timer;
+    auto cb = []() { printf("%s", "timer callback"); };
+    timer.start(&cb, 30);
+
+    app.exec();
     return 0;
 }

@@ -32,7 +32,7 @@ int SDLApp::exec()
             SDL_Quit();
             return 0;
         }
-        case SDL_USEREVENT: {
+        case SDL_USEREVENT: {   // 对应 Timer::start 时，注册的 SDL_UserEvent
             std::function<void()> cb = *(std::function<void()>*)event.user.data1;
             cb();
             break;
@@ -56,7 +56,7 @@ void SDLApp::quit()
     SDL_PushEvent(&event);
 }
 
-void SDLApp::registerEvent(uint32_t eventType, const std::function<void(SDL_Event*)> &callback)
+void SDLApp::registerEvent(Uint32 eventType, const std::function<void(SDL_Event*)> &callback)
 {
     m_eventMap[eventType] = callback;
 }

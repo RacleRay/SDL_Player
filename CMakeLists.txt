@@ -46,6 +46,9 @@ add_subdirectory(./example)
 
 # 遍历源文件
 file(GLOB_RECURSE CPP_SOURCES "src/*.cpp")
+FOREACH(file_path ${CPP_SOURCES})
+    message(STATUS "[INFO] Found ${file_path} source files.")
+ENDFOREACH()
 
 # 排除 main.cpp 文件
 # list(FILTER CPP_SOURCES EXCLUDE REGEX "src/main.cpp")
