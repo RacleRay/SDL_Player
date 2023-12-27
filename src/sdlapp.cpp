@@ -25,6 +25,7 @@ int SDLApp::exec()
     SDL_Event event;
 
     for (;;) {
+        // 带超时的事件等待，阻塞调用. 另一种接口是 SDL_PollEvent : 使用传统的事件轮询机制，非阻塞调用，有事件返回1，否则返回0
         SDL_WaitEventTimeout(&event, 1);
 
         switch (event.type) {
@@ -56,6 +57,7 @@ void SDLApp::quit()
     SDL_PushEvent(&event);
 }
 
+// 注册事件及相应的回调函数，用于交互事件注册
 void SDLApp::registerEvent(Uint32 eventType, const std::function<void(SDL_Event*)> &callback)
 {
     m_eventMap[eventType] = callback;

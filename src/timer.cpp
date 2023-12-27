@@ -31,6 +31,8 @@ void Timer::start(void* callback, int interval)
         return;
     }
 
+    // add new timer : 精度依赖于操作系统的调度精度，属于典型的非实时定时器
+    // 设置超时时间和超时后的回调函数. 回调函数中再将 callback 关联到 USEREVENT 事件
     SDL_TimerID timerId = SDL_AddTimer(interval, callbackfunc, callback);
     if (timerId == 0) {
         return;
