@@ -22,8 +22,28 @@ extern "C" {
 #endif
 
 #include "log.h"
+#include "renderview.h"
 #include "sdlapp.h"
 #include "timer.h"
+
+
+struct RenderPairData
+{
+    RenderItem *item = nullptr;
+    RenderView *view = nullptr;
+};
+
+static void FN_DecodeImage_Cb(unsigned char* data, int w, int h, void *userdata)
+{
+    // 创建纹理
+    auto *cbData = (RenderPairData*)userdata;
+    if (!cbData->item) {
+        cbData->item = cbData->view->createRGB24Texture(w, h);
+    }
+
+    // 更新纹理
+    cbData->view->updateTexture(cbData->item, data, h);
+}
 
 
 int main(int argc, char **argv) {
@@ -33,6 +53,12 @@ int main(int argc, char **argv) {
     ff_log_line("%s", "test");
 
     SDLApp app;
+
+    RenderView view;
+    view.initSDL();
+
+    auto* callback_data = new RenderPairData;
+    callback_data->view = &view;
 
     Timer timer;
     auto cb = []() { printf("%s", "timer callback"); };
