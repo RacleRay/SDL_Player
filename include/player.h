@@ -32,7 +32,7 @@ class FFmpegPlayer {
     FFmpegPlayerCtx playerCtx;
     std::string m_filePath;
     SDL_AudioSpec audio_wanted_spec;
-    std::atomic<bool> m_stop{false};
+    std::atomic_bool m_stop{false};
 
   private:
     DemuxThread *m_demuxThread = nullptr;

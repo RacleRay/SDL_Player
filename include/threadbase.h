@@ -19,7 +19,7 @@ class ThreadBase {
     std::thread *m_th = nullptr;
 
   protected:
-    std::atomic<bool> m_stop {false};
+    std::atomic_bool m_stop {false};
 };
 
 #endif //!__THREADBASE__H__

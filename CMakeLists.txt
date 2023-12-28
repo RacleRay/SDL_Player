@@ -98,5 +98,5 @@ include_directories( ${ffmpeg_headers_DIR} )
 message(STATUS "[INFO] Found ${ffmpeg_headers_DIR} header directories.")
 
 target_link_libraries(${PROJECT_NAME} ${SDL2_LIBRARIES} avcodec avformat avutil swresample swscale swscale avfilter)
-
+target_compile_options(${PROJECT_NAME} PRIVATE -mavx2)
 
