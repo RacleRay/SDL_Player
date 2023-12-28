@@ -1,13 +1,11 @@
 #include "packqueue.h"
 
-PacketQueue::PacketQueue()
-{
+PacketQueue::PacketQueue() {
     mutex = SDL_CreateMutex();
     cond = SDL_CreateCond();
 }
 
-int PacketQueue::packetPut(AVPacket *pkt)
-{
+int PacketQueue::packetPut(AVPacket *pkt) {
     SDL_LockMutex(mutex);
 
     pkts.push_back(*pkt);
@@ -18,13 +16,12 @@ int PacketQueue::packetPut(AVPacket *pkt)
     return 0;
 }
 
-int PacketQueue::packetGet(AVPacket *pkt, std::atomic<bool> &quit)
-{
+int PacketQueue::packetGet(AVPacket *pkt, std::atomic<bool> &quit) {
     int ret = 0;
 
     SDL_LockMutex(mutex);
 
-    for(;;) {
+    for (;;) {
         if (!pkts.empty()) {
             AVPacket &firstPkt = pkts.front();
 
@@ -36,10 +33,10 @@ int PacketQueue::packetGet(AVPacket *pkt, std::atomic<bool> &quit)
 
             ret = 1;
             break;
-        } else {
-            // use SDL_CondWaitTimeout for non-block player
-            SDL_CondWaitTimeout(cond, mutex, 500);
         }
+
+        // use SDL_CondWaitTimeout for non-block player
+        SDL_CondWaitTimeout(cond, mutex, 500);
 
         if (quit) {
             ret = -1;
@@ -51,8 +48,7 @@ int PacketQueue::packetGet(AVPacket *pkt, std::atomic<bool> &quit)
     return ret;
 }
 
-void PacketQueue::packetFlush()
-{
+void PacketQueue::packetFlush() {
     SDL_LockMutex(mutex);
 
     std::list<AVPacket>::iterator iter;
@@ -66,7 +62,6 @@ void PacketQueue::packetFlush()
     SDL_UnlockMutex(mutex);
 }
 
-int PacketQueue::packetSize()
-{
+int PacketQueue::packetSize() {
     return size;
 }

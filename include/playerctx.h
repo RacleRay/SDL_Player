@@ -59,14 +59,14 @@ enum PauseState {
 struct FFmpegPlayerCtx {
     AVFormatContext *formatCtx = nullptr;
 
-    AVCodecContext *aCodecCtx = nullptr;
-    AVCodecContext *vCodecCtx = nullptr;
+    AVCodecContext *audioCodecCtx = nullptr;
+    AVCodecContext *videoCodecCtx = nullptr;
 
-    int             videoStream = -1;
-    int             audioStream = -1;
+    int             videoStreamIdx = -1;
+    int             audioStreamIdx = -1;
 
-    AVStream        *audio_st = nullptr;
-    AVStream        *video_st = nullptr;
+    AVStream        *audio_stream = nullptr;
+    AVStream        *video_stream = nullptr;
 
     PacketQueue     audioq;
     PacketQueue     videoq;
@@ -81,8 +81,8 @@ struct FFmpegPlayerCtx {
 
     // seek 操作的上下文信息
     std::atomic<int> seek_req {0};
-    int              seek_flags;
-    int64_t          seek_pos;
+    int              seek_flags;      // direction flag
+    int64_t          seek_pos;        // seek position
 
     // 用以 seek 操作的状态机
     std::atomic<bool> flush_actx {false};
@@ -96,10 +96,10 @@ struct FFmpegPlayerCtx {
     double          video_clock = 0.0;
 
     // 图像队列
-    VideoPicture    pictq[VIDEO_PICTURE_QUEUE_SIZE];
-    std::atomic<int>             pictq_size {0};
-    std::atomic<int>             pictq_rindex {0};
-    std::atomic<int>             pictq_windex {0};
+    VideoPicture     pictq[VIDEO_PICTURE_QUEUE_SIZE];
+    std::atomic<int> pictq_size {0};
+    std::atomic<int> pictq_rindex {0};
+    std::atomic<int> pictq_windex {0};
     SDL_mutex       *pictq_mutex = nullptr;
     SDL_cond        *pictq_cond = nullptr;
 
@@ -111,8 +111,8 @@ struct FFmpegPlayerCtx {
     std::atomic<int> pause {PauseState::UNPAUSE};
 
     // image callback
-    ImageCallback   imgCb = nullptr;
-    void            *cbData = nullptr;
+    ImageCallback   dec_img_callback = nullptr;
+    void            *dec_img_cb_data = nullptr;
 
     void init()
     {
@@ -142,6 +142,5 @@ struct FFmpegPlayerCtx {
         }
     }
 };
-
 
 #endif //!__PLAYERCTX__H__

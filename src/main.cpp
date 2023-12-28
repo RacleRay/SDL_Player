@@ -25,50 +25,44 @@ extern "C" {
 #include "sdlapp.h"
 #include "timer.h"
 
-
-struct RenderPairData
-{
+struct RenderPairData {
     RenderItem *item = nullptr;
     RenderView *view = nullptr;
 };
 
 // image callback
-static void FN_DecodeImage_Cb(unsigned char* data, int w, int h, void *userdata)
-{
-    auto *cbData = (RenderPairData*)userdata;
+// w : image width,  h : image height
+static void ON_DecodeImage_Cb(unsigned char *data, int w, int h, void *dec_img_param) {
+    auto *cbData = (RenderPairData *)dec_img_param;
     if (!cbData->item) {
         cbData->item = cbData->view->createRGB24Texture(w, h);
     }
-
     cbData->view->updateTexture(cbData->item, data, h);
 }
 
-
 // 主线程执行事件循环
-int main(int argc, char **argv)
-{
+int main(int argc, char **argv) {
     if (argc < 2) {
-        ff_log_line("usage: %s media_file_path", "./ffmpeg-simple-player");
+        ff_log_line("usage: %s media_file_absolute_path", "./SDL_Player");
         return -1;
     }
 
-    SDLApp a;
+    SDLApp app;
 
-    // render video
     RenderView view;
     view.initSDL();
 
-    Timer ti;
-    std::function<void()> cb = std::bind(&RenderView::onRefresh, &view);
-    ti.start(&cb, 30);
+    auto *dec_img_params = new RenderPairData;
+    dec_img_params->view = &view;
 
-    auto *cbData = new RenderPairData;
-    cbData->view = &view;
+    Timer timer;
+    std::function<void()> cb = std::bind(&RenderView::onRefresh, &view);
+    timer.start(&cb, 30);
 
     FFmpegPlayer player;
-    //player.setFilePath(argv[1]);
-    player.setFilePath("/home/racle/Multimedia/dev/SDL_Player/build/output.mp4");
-    player.setImageCb(FN_DecodeImage_Cb, cbData);
+    player.setFilePath(argv[1]);
+    // player.setFilePath("/home/racle/Multimedia/dev/SDL_Player/build/output.mp4");
+    player.setImageCb(ON_DecodeImage_Cb, dec_img_params);
     if (player.initPlayer() != 0) {
         return -1;
     }
@@ -77,5 +71,5 @@ int main(int argc, char **argv)
 
     player.start();
 
-    return a.exec();
+    return app.exec();
 }

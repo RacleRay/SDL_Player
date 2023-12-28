@@ -23,7 +23,7 @@ class VideoDecodeThread : public ThreadBase {
     int queue_picture(FFmpegPlayerCtx *player_ctx, AVFrame *pFrame, double pts);
 
   private:
-    FFmpegPlayerCtx *playerCtx = nullptr;
+    FFmpegPlayerCtx *m_player_context = nullptr;
 };
 
 #endif //!__VIDEODECODE__H__

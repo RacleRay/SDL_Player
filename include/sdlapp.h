@@ -18,7 +18,7 @@ public:
 public:
     int exec();
 
-    void quit();
+    static void quit();
 
     void registerEvent(Uint32 eventType, const std::function<void(SDL_Event*)> &callback);
 
@@ -26,7 +26,7 @@ public:
     static SDLApp *instance();
 
 private:
-    std::map<uint32_t, std::function<void(SDL_Event*)>> m_userEventMaps;
+    std::map<uint32_t, std::function<void(SDL_Event*)>> m_registeredEventMaps;
 };
 
 #endif //!__SDLAPP__H__
