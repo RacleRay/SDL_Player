@@ -2,11 +2,8 @@
 #include <cstdio>
 #include <functional>
 
-
-#ifdef __cplusplus
-#define __STDC_CONSTANT_MACROS
 extern "C" {
-#endif
+// #define __STDC_CONSTANT_MACROS
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libavutil/avassert.h>
@@ -18,9 +15,7 @@ extern "C" {
 #include <libavutil/timestamp.h>
 #include <libswresample/swresample.h>
 #include <libswscale/swscale.h>
-#ifdef __cplusplus
 }
-#endif
 
 #include "audio.h"
 #include "log.h"
@@ -30,52 +25,57 @@ extern "C" {
 #include "sdlapp.h"
 #include "timer.h"
 
-struct RenderPairData {
+
+struct RenderPairData
+{
     RenderItem *item = nullptr;
     RenderView *view = nullptr;
 };
 
-static void
-FN_DecodeImage_Cb(unsigned char *data, int w, int h, void *userdata) {
-    // 创建纹理
-    auto *cbData = (RenderPairData *)userdata;
+// image callback
+static void FN_DecodeImage_Cb(unsigned char* data, int w, int h, void *userdata)
+{
+    auto *cbData = (RenderPairData*)userdata;
     if (!cbData->item) {
         cbData->item = cbData->view->createRGB24Texture(w, h);
     }
 
-    // 更新纹理
     cbData->view->updateTexture(cbData->item, data, h);
 }
 
-int main(int argc, char **argv) {
+
+// 主线程执行事件循环
+int main(int argc, char **argv)
+{
     if (argc < 2) {
-        ff_log_line("Usage: %s <input file>", argv[0]);
+        ff_log_line("usage: %s media_file_path", "./ffmpeg-simple-player");
         return -1;
     }
-    ff_log_line("%s", "test");
 
-    SDLApp app;
+    SDLApp a;
 
+    // render video
     RenderView view;
     view.initSDL();
 
-    auto *callback_data = new RenderPairData;
-    callback_data->view = &view;
+    Timer ti;
+    std::function<void()> cb = std::bind(&RenderView::onRefresh, &view);
+    ti.start(&cb, 30);
 
-    Timer timer;
-    auto cb = []() {
-        printf("%s", "timer callback");
-    };
-    timer.start(&cb, 30);
+    auto *cbData = new RenderPairData;
+    cbData->view = &view;
 
     FFmpegPlayer player;
-    player.setFilePath("/home/racle/Dev/sdl/build/Makefile/output.mp4");
-    player.setImageCb(FN_DecodeImage_Cb, callback_data);
+    //player.setFilePath(argv[1]);
+    player.setFilePath("/home/racle/Multimedia/dev/SDL_Player/build/output.mp4");
+    player.setImageCb(FN_DecodeImage_Cb, cbData);
+    if (player.initPlayer() != 0) {
+        return -1;
+    }
 
-    ff_log_line("Player init success. start play...");
+    ff_log_line("FFmpegPlayer init success");
 
     player.start();
 
-    app.exec();
-    return 0;
+    return a.exec();
 }

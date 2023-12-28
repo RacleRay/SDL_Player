@@ -48,7 +48,7 @@ struct VideoPicture {
 };
 
 
-enum class PauseState {
+enum PauseState {
     UNPAUSE = 0,
     PAUSE = 1
 };
@@ -80,7 +80,7 @@ struct FFmpegPlayerCtx {
     int             audio_pkt_size = 0;
 
     // seek 操作的上下文信息
-    std::atomic<int> seek_req;
+    std::atomic<int> seek_req {0};
     int              seek_flags;
     int64_t          seek_pos;
 
@@ -108,7 +108,7 @@ struct FFmpegPlayerCtx {
     SwsContext      *sws_ctx = nullptr;
     SwrContext      *swr_ctx = nullptr;
 
-    std::atomic<PauseState> pause {PauseState::UNPAUSE};
+    std::atomic<int> pause {PauseState::UNPAUSE};
 
     // image callback
     ImageCallback   imgCb = nullptr;
@@ -123,7 +123,7 @@ struct FFmpegPlayerCtx {
         pictq_cond  = SDL_CreateCond();
     }
 
-    void fini()
+    void finish()
     {
         if (audio_frame) {
             av_frame_free(&audio_frame);

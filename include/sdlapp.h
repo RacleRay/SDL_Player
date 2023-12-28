@@ -9,6 +9,8 @@ extern "C" {
 #include <SDL.h>
 }
 
+#define sdlApp (SDLApp::instance())
+
 class SDLApp {
 public:
     SDLApp();
@@ -24,7 +26,7 @@ public:
     static SDLApp *instance();
 
 private:
-    std::map<uint32_t, std::function<void(SDL_Event*)>> m_eventMap;
+    std::map<uint32_t, std::function<void(SDL_Event*)>> m_userEventMaps;
 };
 
 #endif //!__SDLAPP__H__

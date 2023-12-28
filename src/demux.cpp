@@ -5,21 +5,25 @@
 #include "player.h"
 
 
+// DemuxThread::DemuxThread()
+// {
+
+// }
+
 void DemuxThread::setPlayerCtx(FFmpegPlayerCtx *ctx)
 {
-    is = ctx;
+    player_ctx = ctx;
 }
 
 int DemuxThread::initDemuxThread()
 {
     AVFormatContext *formatCtx = nullptr;
     // 自动分配上下文 formatCtx
-    if (avformat_open_input(&formatCtx, is->filename, nullptr, nullptr) != 0) {
+    if (avformat_open_input(&formatCtx, player_ctx->filename, nullptr, nullptr) != 0) {
         ff_log_line("avformat_open_input Failed.");
         return -1;
     }
-
-    is->formatCtx = formatCtx;
+    player_ctx->formatCtx = formatCtx;
 
     // 查找流信息
     if (avformat_find_stream_info(formatCtx, nullptr) < 0) {
@@ -28,16 +32,16 @@ int DemuxThread::initDemuxThread()
     }
 
     // 将输入文件信息打印出来
-    av_dump_format(formatCtx, 0, is->filename, 0);
+    av_dump_format(formatCtx, 0, player_ctx->filename, 0);
 
     // 打开音频解码器
-    if (stream_open(is, AVMEDIA_TYPE_AUDIO) < 0) {
+    if (stream_open(player_ctx, AVMEDIA_TYPE_AUDIO) < 0) {
         ff_log_line("open audio stream Failed.");
         return -1;
     }
 
     // 打开视频解码器
-    if (stream_open(is, AVMEDIA_TYPE_VIDEO) < 0) {
+    if (stream_open(player_ctx, AVMEDIA_TYPE_VIDEO) < 0) {
         ff_log_line("open video stream Failed.");
         return -1;
     }
@@ -47,29 +51,29 @@ int DemuxThread::initDemuxThread()
 
 void DemuxThread::finiDemuxThread()
 {
-    if (is->formatCtx) {
-        avformat_close_input(&is->formatCtx);
-        is->formatCtx = nullptr;
+    if (player_ctx->formatCtx) {
+        avformat_close_input(&player_ctx->formatCtx);
+        player_ctx->formatCtx = nullptr;
     }
 
-    if (is->aCodecCtx) {
-        avcodec_free_context(&is->aCodecCtx);
-        is->aCodecCtx = nullptr;
+    if (player_ctx->aCodecCtx) {
+        avcodec_free_context(&player_ctx->aCodecCtx);
+        player_ctx->aCodecCtx = nullptr;
     }
 
-    if (is->vCodecCtx) {
-        avcodec_free_context(&is->vCodecCtx);
-        is->vCodecCtx = nullptr;
+    if (player_ctx->vCodecCtx) {
+        avcodec_free_context(&player_ctx->vCodecCtx);
+        player_ctx->vCodecCtx = nullptr;
     }
 
-    if (is->swr_ctx) {
-        swr_free(&is->swr_ctx);
-        is->swr_ctx = nullptr;
+    if (player_ctx->swr_ctx) {
+        swr_free(&player_ctx->swr_ctx);
+        player_ctx->swr_ctx = nullptr;
     }
 
-    if (is->sws_ctx) {
-        sws_freeContext(is->sws_ctx);
-        is->sws_ctx = nullptr;
+    if (player_ctx->sws_ctx) {
+        sws_freeContext(player_ctx->sws_ctx);
+        player_ctx->sws_ctx = nullptr;
     }
 }
 
@@ -89,59 +93,59 @@ int DemuxThread::decode_loop()
         }
 
         // begin seek
-        // 主线程：读取键盘事件，并设置 seek 参数
-        // demux线程：检查 seek 参数，执行 av_seek_frame 跳转，并清空音视频队列
-        if (is->seek_req) {
+        //      主线程：读取键盘事件，并设置 seek 参数
+        //      demux线程：检查 seek 参数，执行 av_seek_frame 跳转，并清空音视频队列
+        if (player_ctx->seek_req) {
             int stream_index= -1;
-            int64_t seek_target = is->seek_pos;
+            int64_t seek_target = player_ctx->seek_pos;
 
-            if (is->videoStream >= 0) {
-                stream_index = is->videoStream;
-            } else if(is->audioStream >= 0) {
-                stream_index = is->audioStream;
+            if (player_ctx->videoStream >= 0) {
+                stream_index = player_ctx->videoStream;
+            } else if(player_ctx->audioStream >= 0) {
+                stream_index = player_ctx->audioStream;
             }
 
             if (stream_index >= 0) {
                 // 转换时间基，转化到 time_base 的时间基
-                seek_target= av_rescale_q(seek_target, AVRational{1, AV_TIME_BASE}, is->formatCtx->streams[stream_index]->time_base);
+                seek_target= av_rescale_q(seek_target, AVRational{1, AV_TIME_BASE}, player_ctx->formatCtx->streams[stream_index]->time_base);
             }
 
             // 执行跳转
-            if (av_seek_frame(is->formatCtx, stream_index, seek_target, is->seek_flags) < 0) {
-                ff_log_line("%s: error while seeking\n", is->filename);
+            if (av_seek_frame(player_ctx->formatCtx, stream_index, seek_target, player_ctx->seek_flags) < 0) {
+                ff_log_line("%s: error while seeking\n", player_ctx->filename);
             } else {
-                if(is->audioStream >= 0) {
-                    is->audioq.packetFlush();
-                    is->flush_actx = true;   // 清除音频buffer的 flag
+                if(player_ctx->audioStream >= 0) {
+                    player_ctx->audioq.packetFlush();
+                    player_ctx->flush_actx = true;   // 清除音频buffer的 flag
                 }
-                if (is->videoStream >= 0) {
-                    is->videoq.packetFlush();
-                    is->flush_vctx = true;
+                if (player_ctx->videoStream >= 0) {
+                    player_ctx->videoq.packetFlush();
+                    player_ctx->flush_vctx = true;
                 }
             }
 
             // reset to zero when seeking done
-            is->seek_req = 0;
+            player_ctx->seek_req = 0;
         }
 
         // 若音视频队列中，数据大于阈值，则延时 10ms , 再读取 AVPacket
-        if (is->audioq.packetSize() > MAX_AUDIOQ_SIZE || is->videoq.packetSize() > MAX_VIDEOQ_SIZE) {
+        if (player_ctx->audioq.packetSize() > MAX_AUDIOQ_SIZE || player_ctx->videoq.packetSize() > MAX_VIDEOQ_SIZE) {
             SDL_Delay(10);
             continue;
         }
 
         // 将未解码的数据存储在 AVPacket 中
-        if (av_read_frame(is->formatCtx, packet) < 0) {
+        if (av_read_frame(player_ctx->formatCtx, packet) < 0) {
             ff_log_line("av_read_frame error");
             break;
         }
 
         // 视频帧一般为一帧数据
-        if (packet->stream_index == is->videoStream) {
-            is->videoq.packetPut(packet);
+        if (packet->stream_index == player_ctx->videoStream) {
+            player_ctx->videoq.packetPut(packet);
         // 音频帧一般为多个帧
-        } else if (packet->stream_index == is->audioStream) {
-            is->audioq.packetPut(packet);
+        } else if (packet->stream_index == player_ctx->audioStream) {
+            player_ctx->audioq.packetPut(packet);
         } else {  // 字幕等其他 packet 未处理
             av_packet_unref(packet);
         }
@@ -155,15 +159,15 @@ int DemuxThread::decode_loop()
 
     SDL_Event event;
     event.type = FF_QUIT_EVENT;
-    event.user.data1 = is;
+    event.user.data1 = player_ctx;
     SDL_PushEvent(&event);
 
     return 0;
 }
 
-int DemuxThread::stream_open(FFmpegPlayerCtx *is, int media_type)
+int DemuxThread::stream_open(FFmpegPlayerCtx *player_ctx, int media_type)
 {
-    AVFormatContext *formatCtx = is->formatCtx;
+    AVFormatContext *formatCtx = player_ctx->formatCtx;
     AVCodecContext *codecCtx = nullptr;
     AVCodec *codec = nullptr;
 
@@ -187,35 +191,35 @@ int DemuxThread::stream_open(FFmpegPlayerCtx *is, int media_type)
 
     switch(codecCtx->codec_type) {
     case AVMEDIA_TYPE_AUDIO:
-        is->audioStream = stream_index;
-        is->aCodecCtx = codecCtx;
-        is->audio_st = formatCtx->streams[stream_index];
+        player_ctx->audioStream = stream_index;
+        player_ctx->aCodecCtx = codecCtx;
+        player_ctx->audio_st = formatCtx->streams[stream_index];
         // 创建 SwrContext 用于处理音频重采样
-        is->swr_ctx = swr_alloc();
+        player_ctx->swr_ctx = swr_alloc();
 
-        av_opt_set_chlayout(is->swr_ctx, "in_chlayout", &codecCtx->ch_layout, 0);
-        av_opt_set_int(is->swr_ctx, "in_sample_rate",       codecCtx->sample_rate, 0);
-        av_opt_set_sample_fmt(is->swr_ctx, "in_sample_fmt", codecCtx->sample_fmt, 0);
+        av_opt_set_chlayout(player_ctx->swr_ctx, "in_chlayout", &codecCtx->ch_layout, 0);
+        av_opt_set_int(player_ctx->swr_ctx, "in_sample_rate",       codecCtx->sample_rate, 0);
+        av_opt_set_sample_fmt(player_ctx->swr_ctx, "in_sample_fmt", codecCtx->sample_fmt, 0);
 
         AVChannelLayout outLayout;
         // use stereo
         av_channel_layout_default(&outLayout, 2);
 
-        av_opt_set_chlayout(is->swr_ctx, "out_chlayout", &outLayout, 0);
-        av_opt_set_int(is->swr_ctx, "out_sample_rate",       48000, 0);
-        av_opt_set_sample_fmt(is->swr_ctx, "out_sample_fmt", AV_SAMPLE_FMT_S16, 0);
-        
-        swr_init(is->swr_ctx);
+        av_opt_set_chlayout(player_ctx->swr_ctx, "out_chlayout", &outLayout, 0);
+        av_opt_set_int(player_ctx->swr_ctx, "out_sample_rate",       48000, 0);
+        av_opt_set_sample_fmt(player_ctx->swr_ctx, "out_sample_fmt", AV_SAMPLE_FMT_S16, 0);
+ 
+        swr_init(player_ctx->swr_ctx);
 
         break;
     case AVMEDIA_TYPE_VIDEO:
-        is->videoStream = stream_index;
-        is->vCodecCtx   = codecCtx;
-        is->video_st    = formatCtx->streams[stream_index];
-        is->frame_timer = (double)av_gettime() / 1000000.0;
-        is->frame_last_delay = 40e-3;
+        player_ctx->videoStream = stream_index;
+        player_ctx->vCodecCtx   = codecCtx;
+        player_ctx->video_st    = formatCtx->streams[stream_index];
+        player_ctx->frame_timer = (double)av_gettime() / 1000000.0;
+        player_ctx->frame_last_delay = 40e-3;
         // 创建 SwsContext 用于视频图像缩放、颜色空间转换
-        is->sws_ctx = sws_getContext(
+        player_ctx->sws_ctx = sws_getContext(
                     codecCtx->width,
                     codecCtx->height,
                     codecCtx->pix_fmt,

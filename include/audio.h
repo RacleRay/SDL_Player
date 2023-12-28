@@ -25,6 +25,8 @@ class AudioDecodeThread : public ThreadBase {
   public:
     AudioDecodeThread() = default;
 
+    ~AudioDecodeThread() override = default;
+
     void setPlayerCtx(FFmpegPlayerCtx *ctx);
 
     void getAudioData(unsigned char *stream, int len);
@@ -32,10 +34,10 @@ class AudioDecodeThread : public ThreadBase {
     void run() override;
 
   private:
-    int audio_decode_frame(FFmpegPlayerCtx *is, double *pts_ptr);
+    int audio_decode_frame(FFmpegPlayerCtx *player_ctx, double *pts_ptr);
 
   private:
-    FFmpegPlayerCtx *is = nullptr;
+    FFmpegPlayerCtx *player_ctx = nullptr;
 };
 
 #endif //!__AUDIO__H__

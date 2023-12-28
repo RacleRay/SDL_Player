@@ -10,7 +10,7 @@ class Timer {
 public:
     Timer() = default;
 
-    void start(void* callback, int interval);
+    void start(void* cb, int interval);
 
     void stop();
 

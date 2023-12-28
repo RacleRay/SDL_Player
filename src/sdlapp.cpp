@@ -5,17 +5,18 @@
 #include "sdlapp.h"
 
 
-static SDLApp* g_app_instance = nullptr;
+#define SDL_APP_EVENT_TIMEOUT (1)
 
+static SDLApp* globalInstance = nullptr;
 
 SDLApp::SDLApp()
 {
     SDL_Init(SDL_INIT_EVERYTHING);
 
-    if (!g_app_instance) {
-        g_app_instance = this;
+    if (!globalInstance) {
+        globalInstance = this;
     } else {
-        (void)fprintf(stderr, "SDLApp::SDLApp() - already initialized\n");
+        fprintf(stderr, "only one instance allowed\n");
         exit(1);
     }
 }
@@ -23,29 +24,29 @@ SDLApp::SDLApp()
 int SDLApp::exec()
 {
     SDL_Event event;
-
     for (;;) {
-        // 带超时的事件等待，阻塞调用. 另一种接口是 SDL_PollEvent : 使用传统的事件轮询机制，非阻塞调用，有事件返回1，否则返回0
-        SDL_WaitEventTimeout(&event, 1);
-
-        switch (event.type) {
-        case SDL_QUIT: {
+        // 带超时的事件等待，阻塞调用
+        SDL_WaitEventTimeout(&event, SDL_APP_EVENT_TIMEOUT);
+        // SDL_PollEvent : 使用传统的事件轮询机制，非阻塞调用，有事件返回1，否则返回0
+        switch(event.type) {
+        case SDL_QUIT:
             SDL_Quit();
             return 0;
-        }
-        case SDL_USEREVENT: {   // 对应 Timer::start 时，注册的 SDL_UserEvent
+        case SDL_USEREVENT:
+        {
+            // Timer 设置的 callback ，比如 刷新窗口
             std::function<void()> cb = *(std::function<void()>*)event.user.data1;
             cb();
-            break;
         }
-        default: {
-            auto iter = m_eventMap.find(event.type);
-            if (iter != m_eventMap.end()) {
-                auto on_event_cb = iter->second;
-                on_event_cb(&event);
+            break;
+        default:
+            auto iter = m_userEventMaps.find(event.type);
+            // 只响应 m_userEventMaps 中注册的事件，并执行 callback
+            if (iter != m_userEventMaps.end()) {
+                auto onEventCb = iter->second;
+                onEventCb(&event);
             }
             break;
-        }
         }
     }
 }
@@ -57,13 +58,13 @@ void SDLApp::quit()
     SDL_PushEvent(&event);
 }
 
-// 注册事件及相应的回调函数，用于交互事件注册
-void SDLApp::registerEvent(Uint32 eventType, const std::function<void(SDL_Event*)> &callback)
+// 注册事件及相应的回调函数
+void SDLApp::registerEvent(Uint32 type, const std::function<void (SDL_Event *)> &cb)
 {
-    m_eventMap[eventType] = callback;
+    m_userEventMaps[type] = cb;
 }
 
-SDLApp* SDLApp::instance()
+SDLApp *SDLApp::instance()
 {
-    return g_app_instance;
+    return globalInstance;
 }

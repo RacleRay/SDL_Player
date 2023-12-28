@@ -11,6 +11,8 @@ class VideoDecodeThread : public ThreadBase {
   public:
     VideoDecodeThread() = default;
 
+    ~VideoDecodeThread() override = default;
+
     void setPlayerCtx(FFmpegPlayerCtx *ctx);
 
     void run() override;
@@ -18,7 +20,7 @@ class VideoDecodeThread : public ThreadBase {
   private:
     int video_entry();
 
-    int queue_picture(FFmpegPlayerCtx *is, AVFrame *pFrame, double pts);
+    int queue_picture(FFmpegPlayerCtx *player_ctx, AVFrame *pFrame, double pts);
 
   private:
     FFmpegPlayerCtx *playerCtx = nullptr;

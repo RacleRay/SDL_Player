@@ -3,26 +3,30 @@
 #include "player.h"
 
 
-static double synchronize_video(FFmpegPlayerCtx *is, AVFrame *src_frame, double pts)
+static double synchronize_video(FFmpegPlayerCtx *player_ctx, AVFrame *src_frame, double pts)
 {
     double frame_delay;
 
     if(pts != 0) {
         // if we have pts, set video clock to it
-        is->video_clock = pts;
+        player_ctx->video_clock = pts;
     } else {
         // if we aren't given a pts, set it to the clock
-        pts = is->video_clock;
+        pts = player_ctx->video_clock;
     }
     // update the video clock
-    frame_delay = av_q2d(is->vCodecCtx->time_base);
+    frame_delay = av_q2d(player_ctx->vCodecCtx->time_base);
     // if we are repeating a frame, adjust clock accordingly
     frame_delay += src_frame->repeat_pict * (frame_delay * 0.5);
-    is->video_clock += frame_delay;
+    player_ctx->video_clock += frame_delay;
 
     return pts;
 }
 
+// VideoDecodeThread::VideoDecodeThread()
+// {
+
+// }
 
 void VideoDecodeThread::setPlayerCtx(FFmpegPlayerCtx *ctx)
 {
@@ -37,9 +41,9 @@ void VideoDecodeThread::run()
 
 int VideoDecodeThread::video_entry()
 {
-    FFmpegPlayerCtx *is = playerCtx;
+    FFmpegPlayerCtx *player_ctx = playerCtx;
     AVPacket *packet = av_packet_alloc();
-    AVCodecContext *pCodecCtx = is->vCodecCtx;
+    AVCodecContext *pCodecCtx = player_ctx->vCodecCtx;
     int ret = -1;
     double pts = 0;
 
@@ -54,21 +58,21 @@ int VideoDecodeThread::video_entry()
             break;
         }
 
-        if (is->pause == PauseState::PAUSE) {
+        if (player_ctx->pause == PAUSE) {
             SDL_Delay(5);
             continue;
         }
 
-        if (is->flush_vctx) {
+        if (player_ctx->flush_vctx) {
             ff_log_line("avcodec_flush_buffers(vCodecCtx) for seeking");
-            avcodec_flush_buffers(is->vCodecCtx);
-            is->flush_vctx = false;
+            avcodec_flush_buffers(player_ctx->vCodecCtx);
+            player_ctx->flush_vctx = false;
             continue;
         }
 
         av_packet_unref(packet);
 
-        if (is->videoq.packetGet(packet, m_stop) < 0) {
+        if (player_ctx->videoq.packetGet(packet, m_stop) < 0) {
             break;
         }
 
@@ -86,17 +90,17 @@ int VideoDecodeThread::video_entry()
         } else {
             pts = 0;
         }
-        pts *= av_q2d(is->video_st->time_base);
+        pts *= av_q2d(player_ctx->video_st->time_base);
 
         // frame ready
         if (ret == 0) {
-            ret = sws_scale(is->sws_ctx, (uint8_t const * const *)pFrame->data, pFrame->linesize, 0,
+            ret = sws_scale(player_ctx->sws_ctx, (uint8_t const * const *)pFrame->data, pFrame->linesize, 0,
                             pCodecCtx->height, pFrameRGB->data, pFrameRGB->linesize);
 
-            pts = synchronize_video(is, pFrame, pts);
+            pts = synchronize_video(player_ctx, pFrame, pts);
 
             if (ret == pCodecCtx->height) {
-                if (queue_picture(is, pFrameRGB, pts) < 0) {
+                if (queue_picture(player_ctx, pFrameRGB, pts) < 0) {
                     break;
                 }
             }
@@ -110,49 +114,49 @@ int VideoDecodeThread::video_entry()
     return 0;
 }
 
-int VideoDecodeThread::queue_picture(FFmpegPlayerCtx *is, AVFrame *pFrame, double pts)
+int VideoDecodeThread::queue_picture(FFmpegPlayerCtx *player_ctx, AVFrame *pFrame, double pts)
 {
     VideoPicture *vp;
 
     // wait until we have space for a new pic
-    SDL_LockMutex(is->pictq_mutex);
-    while (is->pictq_size >= VIDEO_PICTURE_QUEUE_SIZE) {
+    SDL_LockMutex(player_ctx->pictq_mutex);
+    while (player_ctx->pictq_size >= VIDEO_PICTURE_QUEUE_SIZE) {
         // 带 timeout，为了方便程序随时退出
         // 保持 queue 读取一帧，queue 渲染一帧
-        SDL_CondWaitTimeout(is->pictq_cond, is->pictq_mutex, 500);
+        SDL_CondWaitTimeout(player_ctx->pictq_cond, player_ctx->pictq_mutex, 500);
         if (m_stop) {
             break;
         }
     }
-    SDL_UnlockMutex(is->pictq_mutex);
+    SDL_UnlockMutex(player_ctx->pictq_mutex);
 
     if (m_stop) {
         return 0;
     }
 
-    // windex is set to 0 initially
-    vp = &is->pictq[is->pictq_windex];
+    // windex player_ctx set to 0 initially
+    vp = &player_ctx->pictq[player_ctx->pictq_windex];
 
     if (!vp->bmp) {
-        SDL_LockMutex(is->pictq_mutex);
+        SDL_LockMutex(player_ctx->pictq_mutex);
         vp->bmp = av_frame_alloc();
         // 给 AVFrame 分配图像数据
-        av_image_alloc(vp->bmp->data, vp->bmp->linesize, is->vCodecCtx->width, is->vCodecCtx->height, AV_PIX_FMT_RGB24, 32);
+        av_image_alloc(vp->bmp->data, vp->bmp->linesize, player_ctx->vCodecCtx->width, player_ctx->vCodecCtx->height, AV_PIX_FMT_RGB24, 32);
         // 或者使用 av_frame_get_buffer() 既可以给视频分配空间，也可以给音频分配空间
-        SDL_UnlockMutex(is->pictq_mutex);
+        SDL_UnlockMutex(player_ctx->pictq_mutex);
     }
 
     // Copy the pic data and set pts
-    memcpy(vp->bmp->data[0], pFrame->data[0], is->vCodecCtx->height * pFrame->linesize[0]);
+    memcpy(vp->bmp->data[0], pFrame->data[0], player_ctx->vCodecCtx->height * pFrame->linesize[0]);
     vp->pts = pts;
 
     // now we inform our display thread that we have a pic ready
-    if(++is->pictq_windex == VIDEO_PICTURE_QUEUE_SIZE) {
-        is->pictq_windex = 0;
+    if(++player_ctx->pictq_windex == VIDEO_PICTURE_QUEUE_SIZE) {
+        player_ctx->pictq_windex = 0;
     }
-    SDL_LockMutex(is->pictq_mutex);
-    is->pictq_size++;
-    SDL_UnlockMutex(is->pictq_mutex);
+    SDL_LockMutex(player_ctx->pictq_mutex);
+    player_ctx->pictq_size++;
+    SDL_UnlockMutex(player_ctx->pictq_mutex);
 
     return 0;
 }

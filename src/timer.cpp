@@ -5,7 +5,8 @@
 // NOTE:
 //  若 SDL 定时器在另一个线程上执行，并且要将回调函数和事件循环在一个线程内执行，
 //  则需要在 callback 中将事件 post 给事件循环所在线程。
-static Uint32 callbackfunc(Uint32 interval, void* param) {
+static Uint32 callbackfunc(Uint32 interval, void *param)
+{
     SDL_Event event;
     SDL_UserEvent userevent;
 
@@ -22,21 +23,24 @@ static Uint32 callbackfunc(Uint32 interval, void* param) {
     return interval;
 }
 
+//=================================================================================
+// Timer class
 
-// callback 由 callbackfunc 中 userevent.data1 保存，并在事件触发时回调
-void Timer::start(void* callback, int interval)
+void Timer::start(void *cb, int interval)
 {
-    // timer already started
     if (m_timerId != 0) {
         return;
     }
 
     // add new timer : 精度依赖于操作系统的调度精度，属于典型的非实时定时器
-    // 设置超时时间和超时后的回调函数. 回调函数中再将 callback 关联到 USEREVENT 事件
-    SDL_TimerID timerId = SDL_AddTimer(interval, callbackfunc, callback);
+    //      callbackfunc 内将注册 SDL_USEREVENT，并关联 cb 参数
+    //      当 SDL_USEREVENT 触发时，调用 cb
+    SDL_TimerID timerId = SDL_AddTimer(interval, callbackfunc, cb);
     if (timerId == 0) {
         return;
     }
+
+    m_timerId = timerId;
 }
 
 void Timer::stop()

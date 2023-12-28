@@ -17,15 +17,17 @@ class DemuxThread : public ThreadBase {
 
     void run() override;
 
+    ~DemuxThread() override = default;
+
   private:
     int decode_loop();
 
-    int audio_decode_frame(FFmpegPlayerCtx *is, double *pts_ptr);
+    int audio_decode_frame(FFmpegPlayerCtx *player_ctx, double *pts_ptr);
 
-    int stream_open(FFmpegPlayerCtx *is, int media_type);
+    int stream_open(FFmpegPlayerCtx *player_ctx, int media_type);
 
   private:
-    FFmpegPlayerCtx *is = nullptr;
+    FFmpegPlayerCtx *player_ctx = nullptr;
 };
 
 #endif //!__DEMUX__H__

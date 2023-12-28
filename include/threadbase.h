@@ -15,6 +15,8 @@ class ThreadBase {
 
     void start();
 
+    virtual ~ThreadBase() = default;
+
   private:
     std::thread *m_th = nullptr;
 

@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.20.0)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 11)
 # set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD 99)
 
 project(SDL_Player VERSION 0.0.1 LANGUAGES C CXX)
 
@@ -46,15 +46,12 @@ add_subdirectory(./example)
 
 # 遍历源文件
 file(GLOB_RECURSE CPP_SOURCES "src/*.cpp")
-FOREACH(file_path ${CPP_SOURCES})
-    message(STATUS "[INFO] Found ${file_path} source files.")
-ENDFOREACH()
+# FOREACH(file_path ${CPP_SOURCES})
+#     message(STATUS "[INFO] Found ${file_path} source files.")
+# ENDFOREACH()
 
 # 排除 main.cpp 文件
 # list(FILTER CPP_SOURCES EXCLUDE REGEX "src/main.cpp")
-
-# 生成可执行文件
-add_executable(${PROJECT_NAME} ${CPP_SOURCES})
 
 # =======================================================
 find_package(SDL2 REQUIRED)
@@ -97,6 +94,16 @@ set_target_properties( avutil PROPERTIES IMPORTED_LOCATION ${ffmpeg_libs_DIR}/li
 include_directories( ${ffmpeg_headers_DIR} )
 message(STATUS "[INFO] Found ${ffmpeg_headers_DIR} header directories.")
 
+
+# =======================================================
+# -march=native -l:libatomic.so.1
+# -D_REENTRANT -fPIC
+# -Wall -Wextra
+# add_compile_options(-O2 -pipe -lpthread -lz -latomic -march=native -l:libatomic.so.1)
+
+# 生成可执行文件
+add_executable(${PROJECT_NAME} ${CPP_SOURCES})
+
 target_link_libraries(${PROJECT_NAME} ${SDL2_LIBRARIES} avcodec avformat avutil swresample swscale swscale avfilter)
-target_compile_options(${PROJECT_NAME} PRIVATE -mavx2)
+# target_compile_options(${PROJECT_NAME} PUBLIC -Wall -O2 -pipe -lpthread -lz -latomic -march=native -l:libatomic.so.1)
 

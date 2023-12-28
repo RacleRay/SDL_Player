@@ -9,19 +9,19 @@
 #include "videodecode.h"
 
 
-static double get_audio_clock(FFmpegPlayerCtx *is)
+static double get_audio_clock(FFmpegPlayerCtx *player_ctx)
 {
     double pts;
     // hw_buf_size : 已经解码出来但是还没有取走的数据大小
     int hw_buf_size, bytes_per_sec, n;
 
-    pts = is->audio_clock;    // pts 在解码后就已经更新
-    hw_buf_size = is->audio_buf_size - is->audio_buf_index;
+    pts = player_ctx->audio_clock;    // pts 在解码后就已经更新
+    hw_buf_size = player_ctx->audio_buf_size - player_ctx->audio_buf_index;
     bytes_per_sec = 0;
-    n = is->aCodecCtx->ch_layout.nb_channels * 2;
+    n = player_ctx->aCodecCtx->ch_layout.nb_channels * 2;
 
-    if(is->audio_st) {
-        bytes_per_sec = is->aCodecCtx->sample_rate * n;
+    if(player_ctx->audio_st) {
+        bytes_per_sec = player_ctx->aCodecCtx->sample_rate * n;
     }
 
     // 减去已经解码但是没有被取走的数据所占用的时间
@@ -38,20 +38,20 @@ static Uint32 sdl_refresh_timer_cb(Uint32 /*interval*/, void *opaque)
     event.user.data1 = opaque;
     SDL_PushEvent(&event);
 
-    // If the callback returns 0, the periodic alarm is cancelled
+    // If the callback returns 0, the periodic alarm player_ctx cancelled
     return 0;
 }
 
-static void schedule_refresh(FFmpegPlayerCtx *is, int delay)
+static void schedule_refresh(FFmpegPlayerCtx *player_ctx, int delay)
 {
-    SDL_AddTimer(delay, sdl_refresh_timer_cb, is);
+    SDL_AddTimer(delay, sdl_refresh_timer_cb, player_ctx);
 }
 
-static void video_display(FFmpegPlayerCtx *is)
+static void video_display(FFmpegPlayerCtx *player_ctx)
 {
-    VideoPicture *vp =  &is->pictq[is->pictq_rindex];
-    if (vp->bmp && is->imgCb) {  // decode image : 调用 FN_DecodeImage_Cb ，更新纹理
-        is->imgCb(vp->bmp->data[0], is->vCodecCtx->width, is->vCodecCtx->height, is->cbData);
+    VideoPicture *vp =  &player_ctx->pictq[player_ctx->pictq_rindex];
+    if (vp->bmp && player_ctx->imgCb) {  // decode image : 调用 FN_DecodeImage_Cb ，更新纹理
+        player_ctx->imgCb(vp->bmp->data[0], player_ctx->vCodecCtx->width, player_ctx->vCodecCtx->height, player_ctx->cbData);
     }
 }
 
@@ -61,14 +61,19 @@ static void FN_Audio_Cb(void *userdata, Uint8 *stream, int len)
     dt->getAudioData(stream, len);
 }
 
-void stream_seek(FFmpegPlayerCtx *is, int64_t pos, int rel)
+void stream_seek(FFmpegPlayerCtx *player_ctx, int64_t pos, int rel)
 {
-    if (!is->seek_req) {
-        is->seek_pos = pos;
-        is->seek_flags = rel < 0 ? AVSEEK_FLAG_BACKWARD : 0;
-        is->seek_req = 1;
+    if (!player_ctx->seek_req) {
+        player_ctx->seek_pos = pos;
+        player_ctx->seek_flags = rel < 0 ? AVSEEK_FLAG_BACKWARD : 0;
+        player_ctx->seek_req = 1;
     }
 }
+
+// FFmpegPlayer::FFmpegPlayer()
+// {
+
+// }
 
 void FFmpegPlayer::setFilePath(const char *filePath)
 {
@@ -129,8 +134,8 @@ int FFmpegPlayer::initPlayer()
         onKeyEvent(e);
     };
 
-    SDLApp::instance()->registerEvent(FF_REFRESH_EVENT, refreshEvent);
-    SDLApp::instance()->registerEvent(SDL_KEYDOWN, keyEvent);
+    sdlApp->registerEvent(FF_REFRESH_EVENT, refreshEvent);
+    sdlApp->registerEvent(SDL_KEYDOWN, keyEvent);
 
     return 0;
 }
@@ -190,7 +195,7 @@ void FFmpegPlayer::stop()
     ff_log_line("demux thread finished.");
 
     ff_log_line("player ctx clean...");
-    playerCtx.fini();
+    playerCtx.finish();
     ff_log_line("player ctx finished.");
 }
 
@@ -208,31 +213,31 @@ void FFmpegPlayer::onRefreshEvent(SDL_Event *e)
         return;
     }
 
-    FFmpegPlayerCtx *is = (FFmpegPlayerCtx *)e->user.data1;
+    FFmpegPlayerCtx *player_ctx = (FFmpegPlayerCtx *)e->user.data1;
     VideoPicture *vp;
     double actual_delay, delay, sync_threshold, ref_clock, diff;
 
-    if(is->video_st) {
-        if(is->pictq_size == 0) {
-            schedule_refresh(is, 1 /*ms*/);
+    if(player_ctx->video_st) {
+        if(player_ctx->pictq_size == 0) {
+            schedule_refresh(player_ctx, 1 /*ms*/);
         } else {
-            vp = &is->pictq[is->pictq_rindex];
+            vp = &player_ctx->pictq[player_ctx->pictq_rindex];
 
             // vp->pts : from video file or decode video clock
-            delay = vp->pts - is->frame_last_pts;   // 当前帧相对于上一帧，应该增加的时间
+            delay = vp->pts - player_ctx->frame_last_pts;   // 当前帧相对于上一帧，应该增加的时间
 
             if(delay <= 0 || delay >= 1.0) {
-                delay = is->frame_last_delay;
+                delay = player_ctx->frame_last_delay;
             }
 
             // 刷新新一帧的时间间隔，最小为 AV_SYNC_THRESHOLD
             sync_threshold = (delay > AV_SYNC_THRESHOLD) ? delay : AV_SYNC_THRESHOLD;
 
             // save for next time
-            is->frame_last_delay = delay; 
-            is->frame_last_pts = vp->pts;
+            player_ctx->frame_last_delay = delay; 
+            player_ctx->frame_last_pts = vp->pts;
 
-            ref_clock = get_audio_clock(is);
+            ref_clock = get_audio_clock(player_ctx);
             diff = vp->pts - ref_clock;   // 当前帧向对于 音频基准 的时间差
 
             // >= AV_NOSYNC_THRESHOLD 直接不调整，相当于忽略了问题帧
@@ -244,29 +249,29 @@ void FFmpegPlayer::onRefreshEvent(SDL_Event *e)
                 }
             }
 
-            is->frame_timer += delay;  // 视频累计时间
+            player_ctx->frame_timer += delay;  // 视频累计时间
             // 视频累计时间和系统时间的差值
-            actual_delay = is->frame_timer - (av_gettime() / 1000000.0);
+            actual_delay = player_ctx->frame_timer - (av_gettime() / 1000000.0);
             // 限制实际延时大于等于 0.01 ，即刷新延时一定大于等于 0.01s
             if (actual_delay < 0.010) {
                 actual_delay = 0.010;
             }
 
-            schedule_refresh(is, (int)(actual_delay * 1000 + 0.5));   // 设置下一次定时刷新事件时间
+            schedule_refresh(player_ctx, (int)(actual_delay * 1000 + 0.5));   // 设置下一次定时刷新事件时间
 
-            video_display(is);  // 显示当前读取的帧
+            video_display(player_ctx);  // 显示当前读取的帧
 
             // pictq_rindex 一直从 0 读取，重置 read index
-            if (++is->pictq_rindex == VIDEO_PICTURE_QUEUE_SIZE) {
-                is->pictq_rindex = 0;
+            if (++player_ctx->pictq_rindex == VIDEO_PICTURE_QUEUE_SIZE) {
+                player_ctx->pictq_rindex = 0;
             }
-            SDL_LockMutex(is->pictq_mutex);
-            is->pictq_size--;
-            SDL_CondSignal(is->pictq_cond);
-            SDL_UnlockMutex(is->pictq_mutex);
+            SDL_LockMutex(player_ctx->pictq_mutex);
+            player_ctx->pictq_size--;
+            SDL_CondSignal(player_ctx->pictq_cond);
+            SDL_UnlockMutex(player_ctx->pictq_mutex);
         }
     } else {
-        schedule_refresh(is, 100 /*ms*/); 
+        schedule_refresh(player_ctx, 100 /*ms*/); 
     }
 }
 
@@ -294,7 +299,7 @@ do_seek:
                 pos = 0;
             }
             ff_log_line("seek to %lf v:%lf a:%lf", pos, get_audio_clock(&playerCtx), get_audio_clock(&playerCtx));
-
+            
             // 设置 seek 参数，这个参数在 demux thread 的 decode_loop 中被检测，执行跳转功能
             // pos * AV_TIME_BASE : 相当于时间单位转化，比如 s 转到 us
             stream_seek(&playerCtx, (int64_t)(pos * AV_TIME_BASE), (int)incr);
@@ -308,18 +313,13 @@ do_seek:
         stop();
 
         // quit sdl event loop
-        SDLApp::instance()->quit();
+        sdlApp->quit();
     case SDLK_SPACE:
-        if (playerCtx.pause == PauseState::PAUSE) {
-            ff_log_line("request pause, cur state=%s", "PAUSE");
+        ff_log_line("request pause, cur state=%d", (int)playerCtx.pause);
+        if (playerCtx.pause == UNPAUSE) {
+            pause(PAUSE);
         } else {
-            ff_log_line("request pause, cur state=%s", "UNPAUSE");
-        }
-
-        if (playerCtx.pause == PauseState::UNPAUSE) {
-            pause(PauseState::PAUSE);
-        } else {
-            pause(PauseState::UNPAUSE);
+            pause(UNPAUSE);
         }
 
     default:
